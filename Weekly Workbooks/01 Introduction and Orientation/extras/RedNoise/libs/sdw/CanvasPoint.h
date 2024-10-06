@@ -1,4 +1,4 @@
-#pragma once
+ #pragma once
 
 #include "TexturePoint.h"
 #include <iostream>
