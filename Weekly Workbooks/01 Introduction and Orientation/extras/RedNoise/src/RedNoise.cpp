@@ -9,7 +9,9 @@
 #include <Colour.h>
 #include <CanvasTriangle.h>
 #include <fstream>
+#include <sstream>
 #include <iostream>
+#include <ModelTriangle.h>
 #include <string>
 #include <TextureMap.h>
 #define WIDTH 320
@@ -148,62 +150,73 @@ CanvasTriangle reorderTriangle(CanvasTriangle triangle){
 }
 
 
-void readOBJ(std::string file_name){
-	std::ifstream inputFile(file_name);
+std::unordered_map<std::string, Colour> readOBJ_material(std::string material_path){
+	// std::string material_path = "/Users/hyoyeon/Desktop/UNI/Year 3/Computer Graphics/CG2024/Weekly Workbooks/04 Wireframes and Rasterising/models/cornell-box.mtl";
+	std::unordered_map<std::string, Colour> colourmap;
+	std::ifstream file(material_path);
+
 	std::string line;
+	std::string curr_material;
+	while(std::getline(file, line)){
+		std::istringstream iss(line);
+		std::string prefix;
+		iss >> prefix;
 
-	while (getline(inputFile, line)){
-		std::stringstream<std::string> stream(line);
-		std::string string_type;
-		stream >> string_type;
-
-		if(string_type == "v"){
-			float x, y, z;
-			stream >> x >> y >> z;
-
+		if(prefix == "newmtl"){
+			iss >> curr_material;
+			colourmap[curr_material] = Colour();
+			colourmap[curr_material].name = curr_material;
+		} else if(prefix == "Kd"){
+			float r, g, b;
+			iss >> r >> g >> b;
+			colourmap[curr_material].red = r;
+			colourmap[curr_material].green = g;
+			colourmap[curr_material].blue = b;
 		}
-
 	}
-
+	file.close();
+	return colourmap;
 }
 
 
-using namespace std;
+void readOBJ(std::string file_name, float scale, std::string material_path){
+	std::ifstream inputFile(file_name);
+	std::string line;
+	std::vector<ModelTriangle> triangles;
+	std::vector<glm::vec3> vertices;
+	std::unordered_map<std::string, Colour> colourmap = readOBJ_material(material_path);
+	std::string curr_colour;
 
-void readOBJFile(const string& filename)
-{
-	ifstream inputFile(filename);
+	while (std::getline(inputFile, line)) {
+		std::istringstream iss(line);
+		std::string prefix;
+		iss >> prefix;
 
-	string line;
-
-	while (getline(inputFile, line)) {
-		stringstream ss(line);
-		string type;
-		ss >> type;  // Extract the type of the line (v, vt, vn, f, etc.)
-
-		if (type == "v") {
+		if (prefix == "v") {
 			float x, y, z;
-			ss >> x >> y >> z;
-			cout << "Vertex: " << x << ", " << y << ", " << z << endl;
-		} else if (type == "vt") {
-			float u, v;
-			ss >> u >> v;
-			cout << "Texture Coord: " << u << ", " << v << endl;
-		} else if (type == "vn") {
-			float nx, ny, nz;
-			ss >> nx >> ny >> nz;
-			cout << "Normal: " << nx << ", " << ny << ", " << nz << endl;
-		} else if (type == "f") {
-			string vertexData;
-			cout << "Face: ";
-			while (ss >> vertexData) {
-				cout << vertexData << " ";
+			iss >> x >> y >> z;
+			vertices.push_back(glm::vec3{x * scale, y * scale, z * scale});
+			std::cout << "Vertex - x: " << x << " y: " << y << " z: " << z << "\n";
+		} else if (prefix == "f") {
+			int v1, v2, v3;
+			char slash;
+
+			iss >> v1 >> slash >> v2 >> slash >> v3;
+			Colour colour = colourmap.at(curr_colour);
+			ModelTriangle triangle(vertices[v1 - 1], vertices[v2 - 1], vertices[v3 - 1], colour);
+			triangles.push_back(triangle);
+			std::cout << "Face ||  v1: " << v1 << " v2: " << v2 << " v3: " << v3 << " Colour: " << colour << "\n";
+		} else if (prefix == "usemtl") {
+			iss >> curr_colour;
+			if (colourmap.find(curr_colour) == colourmap.end()) {
+				std::cout << "No corresponding colour material: " << curr_colour << "\n";
 			}
-			cout << endl;
 		}
 	}
 	inputFile.close();
 }
+
+
 
 
 
@@ -379,6 +392,12 @@ int main(int argc, char *argv[]) {
 	SDL_Event event;
 	std::vector<glm::vec3> result = interpolateThreeElementValues({1.0, 4.0, 9.2}, {4.0, 1.0, 9.8}, 4);
 	Colour colour = Colour{0, 255, 255};
+
+	std::string file_path = "/Users/hyoyeon/Desktop/UNI/Year 3/Computer Graphics/CG2024/Weekly Workbooks/04 Wireframes and Rasterising/models/cornell-box.obj";
+	std::string material_path = "/Users/hyoyeon/Desktop/UNI/Year 3/Computer Graphics/CG2024/Weekly Workbooks/04 Wireframes and Rasterising/models/cornell-box.mtl";
+	readOBJ(file_path, 0.35, material_path);
+
+	// readOBJ_material(material_path);
 
 	while (true) {
 		// We MUST poll for events - otherwise the window will freeze !
