@@ -8,6 +8,9 @@
 #include <CanvasPoint.h>
 #include <Colour.h>
 #include <CanvasTriangle.h>
+#include <fstream>
+#include <iostream>
+#include <string>
 #include <TextureMap.h>
 #define WIDTH 320
 #define HEIGHT 240
@@ -143,6 +146,65 @@ CanvasTriangle reorderTriangle(CanvasTriangle triangle){
 
 	return triangle;
 }
+
+
+void readOBJ(std::string file_name){
+	std::ifstream inputFile(file_name);
+	std::string line;
+
+	while (getline(inputFile, line)){
+		std::stringstream<std::string> stream(line);
+		std::string string_type;
+		stream >> string_type;
+
+		if(string_type == "v"){
+			float x, y, z;
+			stream >> x >> y >> z;
+
+		}
+
+	}
+
+}
+
+
+using namespace std;
+
+void readOBJFile(const string& filename)
+{
+	ifstream inputFile(filename);
+
+	string line;
+
+	while (getline(inputFile, line)) {
+		stringstream ss(line);
+		string type;
+		ss >> type;  // Extract the type of the line (v, vt, vn, f, etc.)
+
+		if (type == "v") {
+			float x, y, z;
+			ss >> x >> y >> z;
+			cout << "Vertex: " << x << ", " << y << ", " << z << endl;
+		} else if (type == "vt") {
+			float u, v;
+			ss >> u >> v;
+			cout << "Texture Coord: " << u << ", " << v << endl;
+		} else if (type == "vn") {
+			float nx, ny, nz;
+			ss >> nx >> ny >> nz;
+			cout << "Normal: " << nx << ", " << ny << ", " << nz << endl;
+		} else if (type == "f") {
+			string vertexData;
+			cout << "Face: ";
+			while (ss >> vertexData) {
+				cout << vertexData << " ";
+			}
+			cout << endl;
+		}
+	}
+	inputFile.close();
+}
+
 
 
 // Triangle
