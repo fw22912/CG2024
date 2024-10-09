@@ -169,9 +169,9 @@ std::unordered_map<std::string, Colour> readOBJ_material(std::string material_pa
 		} else if(prefix == "Kd"){
 			float r, g, b;
 			iss >> r >> g >> b;
-			colourmap[curr_material].red = r;
-			colourmap[curr_material].green = g;
-			colourmap[curr_material].blue = b;
+			colourmap[curr_material].red = static_cast<int>(r * 255.0f);
+			colourmap[curr_material].green = static_cast<int>(g * 255.0f);
+			colourmap[curr_material].blue = static_cast<int>(b * 255.0f);
 		}
 	}
 	file.close();
@@ -179,7 +179,7 @@ std::unordered_map<std::string, Colour> readOBJ_material(std::string material_pa
 }
 
 
-void readOBJ(std::string file_name, float scale, std::string material_path){
+std::pair<std::vector<glm::vec3>, std::vector<ModelTriangle>> read_OBJ(std::string file_name, float scale, std::string material_path){
 	std::ifstream inputFile(file_name);
 	std::string line;
 	std::vector<ModelTriangle> triangles;
@@ -193,7 +193,7 @@ void readOBJ(std::string file_name, float scale, std::string material_path){
 		iss >> prefix;
 
 		if (prefix == "v") {
-			float x, y, z;
+			double x, y, z;
 			iss >> x >> y >> z;
 			vertices.push_back(glm::vec3{x * scale, y * scale, z * scale});
 			std::cout << "Vertex - x: " << x << " y: " << y << " z: " << z << "\n";
@@ -202,10 +202,12 @@ void readOBJ(std::string file_name, float scale, std::string material_path){
 			char slash;
 
 			iss >> v1 >> slash >> v2 >> slash >> v3;
-			Colour colour = colourmap.at(curr_colour);
-			ModelTriangle triangle(vertices[v1 - 1], vertices[v2 - 1], vertices[v3 - 1], colour);
+			Colour colour = colourmap.find(curr_colour)->second;
+			std::cout << "Colour: " << colourmap.find(curr_colour)->second;
+ 			ModelTriangle triangle(vertices[v1 - 1], vertices[v2 - 1], vertices[v3 - 1], colour);
+			triangle.colour = colour;
 			triangles.push_back(triangle);
-			std::cout << "Face ||  v1: " << v1 << " v2: " << v2 << " v3: " << v3 << " Colour: " << colour << "\n";
+			// std::cout << "Face ||  v1: " << v1 << " v2: " << v2 << " v3: " << v3 << " Colour: " << colour << "\n";
 		} else if (prefix == "usemtl") {
 			iss >> curr_colour;
 			if (colourmap.find(curr_colour) == colourmap.end()) {
@@ -214,9 +216,11 @@ void readOBJ(std::string file_name, float scale, std::string material_path){
 		}
 	}
 	inputFile.close();
+
+	std::pair<std::vector<glm::vec3>, std::vector<ModelTriangle>> pair = {vertices, triangles};
+
+	return pair;
 }
-
-
 
 
 
@@ -226,6 +230,7 @@ void draw_stroked_triangle(CanvasTriangle triangle, Colour colour, DrawingWindow
 	drawLine(triangle.v1(), triangle.v2(), colour, window);
 	drawLine(triangle.v2(), triangle.v0(), colour, window);
 }
+
 
 std::pair<int, int> fill_top_triangle(int y, CanvasPoint top, CanvasPoint mid, CanvasPoint bot) {
 	float fst_gap, scd_gap;
@@ -341,6 +346,74 @@ void draw_textured_triangle(CanvasTriangle triangle, TextureMap &textureMap, Dra
 }
 
 
+// CanvasPoint projectVertexOntoCanvasPoint(glm::vec3 cameraPosition, float focalLength, glm::vec3 vertexPosition, DrawingWindow &window){
+// 	CanvasPoint projected_position;
+// 	glm::vec3 relative_position = vertexPosition - cameraPosition;
+//
+// 	projected_position.x = focalLength * (relative_position.x / relative_position.z) + window.width * 0.5;
+// 	projected_position.y = focalLength * (relative_position.y / relative_position.z) + window.height * 0.5;
+//
+// 	return projected_position;
+// }
+
+CanvasPoint projectVertexOntoCanvasPoint(glm::vec3 cameraPosition, float focalLength, glm::vec3 vertexPosition, DrawingWindow &window, float scalingFactor) {
+	CanvasPoint projected_position;
+	glm::vec3 relative_position = vertexPosition - cameraPosition;
+
+	projected_position.x = focalLength * (relative_position.x / relative_position.z) * scalingFactor;
+	projected_position.y = focalLength * (relative_position.y / relative_position.z) * scalingFactor;
+
+	projected_position.x = window.width * 0.5 - projected_position.x;
+	projected_position.y += window.height * 0.5;
+
+	return projected_position;
+}
+
+
+
+void drawProjectedPoints(std::vector<CanvasPoint> points, Colour colour, DrawingWindow &window) {
+	for (const auto& point : points) {
+		// Draw each projected point on the canvas
+		uint32_t pixelColour = (255 << 24) + (uint32_t(colour.red) << 16) + (uint32_t(colour.green) << 8) + uint32_t(colour.blue);
+
+		std::cout << "x: " << point.x << " y: " << point.y << "\n";
+		window.setPixelColour(point.x, point.y, pixelColour);
+	}
+}
+
+
+std::vector<CanvasPoint> projectFileOntoCanvasPoint(std::vector<glm::vec3> vertices, glm::vec3 cameraPosition, float focalLength, DrawingWindow &window){
+	std::vector<CanvasPoint> projected_vertices;
+
+	for(const auto& vertex : vertices)
+	{
+		CanvasPoint projected = projectVertexOntoCanvasPoint(cameraPosition, focalLength, vertex, window, 160);
+		projected_vertices.push_back(projected);
+		// std::cout << "Projected points: " << projected << "\n";
+	}
+
+	return projected_vertices;
+}
+
+
+void projectTriangleOntoCanvasPoint(std::vector<ModelTriangle>& triangles, glm::vec3 cameraPosition, float focalLength, DrawingWindow &window, float scalingFactor){
+	for(const auto& triangle : triangles)
+	{
+		// Project each vertex (v0, v1, v2) separately
+		CanvasPoint v0 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[0], window, scalingFactor);
+		CanvasPoint v1 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[1], window, scalingFactor);
+		CanvasPoint v2 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[2], window, scalingFactor);
+
+		Colour colour = triangle.colour;
+
+
+		drawLine(v0, v1, colour, window);
+		drawLine(v1, v2, colour, window);
+		drawLine(v2, v0, colour, window);
+	}
+}
+
+
 CanvasTriangle randomTriangle(int width, int height){
 	CanvasPoint v0(rand() % width, rand() % height);
 	CanvasPoint v1(rand() % width, rand() % height);
@@ -387,29 +460,28 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
 }
 
 
+
 int main(int argc, char *argv[]) {
-	DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
-	SDL_Event event;
-	std::vector<glm::vec3> result = interpolateThreeElementValues({1.0, 4.0, 9.2}, {4.0, 1.0, 9.8}, 4);
-	Colour colour = Colour{0, 255, 255};
+    DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
+    SDL_Event event;
+    Colour colour = Colour{255, 255, 255};
 
-	std::string file_path = "/Users/hyoyeon/Desktop/UNI/Year 3/Computer Graphics/CG2024/Weekly Workbooks/04 Wireframes and Rasterising/models/cornell-box.obj";
-	std::string material_path = "/Users/hyoyeon/Desktop/UNI/Year 3/Computer Graphics/CG2024/Weekly Workbooks/04 Wireframes and Rasterising/models/cornell-box.mtl";
-	readOBJ(file_path, 0.35, material_path);
+    std::string file_path = "/Users/hyoyeon/Desktop/UNI/Year 3/Computer Graphics/CG2024/Weekly Workbooks/04 Wireframes and Rasterising/models/cornell-box.obj";
+    std::string material_path = "/Users/hyoyeon/Desktop/UNI/Year 3/Computer Graphics/CG2024/Weekly Workbooks/04 Wireframes and Rasterising/models/cornell-box.mtl";
 
-	// readOBJ_material(material_path);
+    std::pair<std::vector<glm::vec3>, std::vector<ModelTriangle>> pair = read_OBJ(file_path, 0.35, material_path);
+    std::vector<glm::vec3> vertices = pair.first;
+    std::vector<ModelTriangle> triangles = pair.second;
 
-	while (true) {
-		// We MUST poll for events - otherwise the window will freeze !
-		if (window.pollForInputEvents(event)) handleEvent(event, window);
-		// draw_filled_triangle(triangle, colour, window);
-		// draw_stroked_triangle(triangle, colour, window);
-		// float point = 320 / 3;
-		// drawLine({0, 0}, {160, 120}, colour, window);
-		// drawLine({319, 0}, {160, 120}, colour, window);
-		// drawLine({160, 0}, {160, 239}, colour, window);
-		// drawLine({point, 120}, {point * 2, 120}, colour, window);
-		// Need to render the frame at the end, or nothing actually gets shown on the screen !
-		window.renderFrame();
-	}
+    glm::vec3 cameraPoint = {0.0, 0.0, 4.0};
+    float focalLength = 2.0;
+
+    projectTriangleOntoCanvasPoint(triangles, cameraPoint, focalLength, window, 160);
+
+    while (true) {
+        // We MUST poll for events - otherwise the window will freeze!
+        if (window.pollForInputEvents(event)) handleEvent(event, window);
+        // Render the frame
+        window.renderFrame();
+    }
 }
