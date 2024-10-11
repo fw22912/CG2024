@@ -21,10 +21,10 @@
 //interpolation
 std::vector<float> interpolateSingleFloats(float from, float to, int numberOfValues){
 	std::vector<float> output{};
-	float gap = (to - from)/(numberOfValues-1);
+	float gap = (to - from)/(numberOfValues);
 	output.reserve(numberOfValues);
 
-	for(int i = 0; i < numberOfValues; ++i){
+	for(int i = 0; i <= numberOfValues; ++i){
 		output.push_back(from + i * gap);
 	}
 
@@ -33,12 +33,12 @@ std::vector<float> interpolateSingleFloats(float from, float to, int numberOfVal
 
 std::vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 to, int numberOfValues){
 	std::vector<glm::vec3> result;
-	float x_gap = (to[0] - from[0])/(numberOfValues-1);
-	float y_gap = (to[1] - from[1])/(numberOfValues-1);
-	float z_gap = (to[2] - from[2])/(numberOfValues-1);
+	float x_gap = (to[0] - from[0])/(numberOfValues);
+	float y_gap = (to[1] - from[1])/(numberOfValues);
+	float z_gap = (to[2] - from[2])/(numberOfValues);
 
 	result.reserve(numberOfValues);
-	for(int i = 0; i<numberOfValues; ++i){
+	for(int i = 0; i<=numberOfValues; ++i){
 		glm::vec3 row = {from[0] + x_gap * i, from[1] + y_gap * i, from[2] + z_gap*i};
 		result.push_back(row);
 	}
@@ -48,11 +48,11 @@ std::vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 t
 
 std::vector<CanvasPoint> interpolateCanvasPoints(CanvasPoint from, CanvasPoint to, float numberOfValues) {
 	std::vector<CanvasPoint> result;
-	float stepX = (to.x - from.x) / (numberOfValues - 1);
-	float stepY = (to.y - from.y) / (numberOfValues - 1);
+	float stepX = (to.x - from.x) / (numberOfValues);
+	float stepY = (to.y - from.y) / (numberOfValues);
 
 	result.reserve(numberOfValues);
-	for (int i = 0; i < numberOfValues; ++i) {
+	for (int i = 0; i <= numberOfValues; ++i) {
 		CanvasPoint canvasPoints;
 		canvasPoints.x = from.x + stepX * i;
 		canvasPoints.y = from.y + stepY * i;
@@ -64,11 +64,11 @@ std::vector<CanvasPoint> interpolateCanvasPoints(CanvasPoint from, CanvasPoint t
 
 std::vector<TexturePoint> interpolateTexturePoints(TexturePoint from, TexturePoint to, int numberOfValues){
 	std::vector<TexturePoint> output;
-	float stepX = (to.x - from.x) / (numberOfValues - 1);
-	float stepY = (to.y - from.y) / (numberOfValues - 1);
+	float stepX = (to.x - from.x) / (numberOfValues);
+	float stepY = (to.y - from.y) / (numberOfValues);
 
 	output.reserve(numberOfValues);
-	for (int i = 0; i < numberOfValues; ++i) {
+	for (int i = 0; i <= numberOfValues; ++i) {
 		TexturePoint texturePoint;
 		texturePoint.x = from.x + stepX * i;
 		texturePoint.y = from.y + stepY * i;
@@ -196,7 +196,7 @@ std::pair<std::vector<glm::vec3>, std::vector<ModelTriangle>> read_OBJ(std::stri
 			double x, y, z;
 			iss >> x >> y >> z;
 			vertices.push_back(glm::vec3{x * scale, y * scale, z * scale});
-			std::cout << "Vertex - x: " << x << " y: " << y << " z: " << z << "\n";
+			// std::cout << "Vertex - x: " << x << " y: " << y << " z: " << z << "\n";
 		} else if (prefix == "f") {
 			int v1, v2, v3;
 			char slash;
@@ -233,14 +233,30 @@ void draw_stroked_triangle(CanvasTriangle triangle, Colour colour, DrawingWindow
 
 
 std::pair<int, int> fill_top_triangle(int y, CanvasPoint top, CanvasPoint mid, CanvasPoint bot) {
-	float fst_gap, scd_gap;
-	int lft, rgt;
+	float top_mid_gap, top_bot_gap;
+	int lft_x, rgt_x;
 
-	fst_gap = (y - top.y) / float(mid.y - top.y);
-	scd_gap = (y - top.y) / float(bot.y - top.y);
-	lft = top.x + fst_gap * (mid.x - top.x);
-	rgt = top.x + scd_gap * (bot.x - top.x);
-    return std::make_pair(lft, rgt);
+	// std::cout << "Filling the top triangle... " ;
+
+
+	if (mid.y != top.y) {
+	top_mid_gap = float(y - top.y) / float(mid.y - top.y);
+	} else {
+
+		top_mid_gap = 0;  // No gap if the edge is horizontal
+	}
+
+	if(top.y != bot.y){
+	top_bot_gap = float(y - top.y) / float(bot.y - top.y);
+	} else{
+		top_bot_gap = 0;
+	}
+
+	// std::cout << "top_mid_gap: " << top_mid_gap << " curr y: " << y ;
+
+	lft_x = top.x + top_mid_gap * (mid.x - top.x);
+	rgt_x = top.x + top_bot_gap * (bot.x - top.x);
+	return std::make_pair(lft_x, rgt_x);
 }
 
 
@@ -363,6 +379,9 @@ CanvasPoint projectVertexOntoCanvasPoint(glm::vec3 cameraPosition, float focalLe
 	projected_position.x = focalLength * (relative_position.x / relative_position.z) * scalingFactor;
 	projected_position.y = focalLength * (relative_position.y / relative_position.z) * scalingFactor;
 
+	// std::cout << "BEFORE PROJECTED       X : " << projected_position.x << "  Y: " << projected_position.y << "\n";
+	// projected_position.y = focalLength * (relative_position.y / relative_position.z) * scalingFactor;
+
 	projected_position.x = window.width * 0.5 - projected_position.x;
 	projected_position.y += window.height * 0.5;
 
@@ -376,7 +395,7 @@ void drawProjectedPoints(std::vector<CanvasPoint> points, Colour colour, Drawing
 		// Draw each projected point on the canvas
 		uint32_t pixelColour = (255 << 24) + (uint32_t(colour.red) << 16) + (uint32_t(colour.green) << 8) + uint32_t(colour.blue);
 
-		std::cout << "x: " << point.x << " y: " << point.y << "\n";
+		// std::cout << "x: " << point.x << " y: " << point.y << "\n";
 		window.setPixelColour(point.x, point.y, pixelColour);
 	}
 }
@@ -407,9 +426,23 @@ void projectTriangleOntoCanvasPoint(std::vector<ModelTriangle>& triangles, glm::
 		Colour colour = triangle.colour;
 
 
-		drawLine(v0, v1, colour, window);
-		drawLine(v1, v2, colour, window);
-		drawLine(v2, v0, colour, window);
+		// drawLine(v0, v1, colour, window);
+		// drawLine(v1, v2, colour, window);
+		// drawLine(v2, v0, colour, window);
+
+
+		std::cout << "--------------------------------NEW DATA--------------------------------\n";
+		std::cout << "V0 x: " << triangle.vertices[0].x << " y: " << triangle.vertices[0].y << "\n";
+		std::cout << "V1 x: " << triangle.vertices[1].x << " y: " << triangle.vertices[1].y << "\n";
+		std::cout << "V2 x: " << triangle.vertices[2].x << " y: " << triangle.vertices[2].y << "\n";
+
+		CanvasTriangle new_triangle = CanvasTriangle(v0, v1, v2);
+		std::cout << "--------FRESHLY PROJECTED--------\n";
+		std::cout << "V0 x: " << new_triangle.vertices[0].x << " y: " << new_triangle.vertices[0].y << "\n";
+		std::cout << "V1 x: " << new_triangle.vertices[1].x << " y: " << new_triangle.vertices[1].y << "\n";
+		std::cout << "V2 x: " << new_triangle.vertices[2].x << " y: " << new_triangle.vertices[2].y << "\n";
+
+		draw_filled_triangle(new_triangle, colour, window);
 	}
 }
 
