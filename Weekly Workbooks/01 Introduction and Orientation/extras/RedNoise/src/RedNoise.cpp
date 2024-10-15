@@ -232,64 +232,64 @@ void draw_stroked_triangle(CanvasTriangle triangle, Colour colour, DrawingWindow
 }
 
 
-std::pair<int, int> fill_top_triangle(int y, CanvasPoint top, CanvasPoint mid, CanvasPoint bot) {
-	float top_mid_gap, top_bot_gap;
-	int lft_x, rgt_x;
 
-	// std::cout << "Filling the top triangle... " ;
+void fill_top_triangle(CanvasPoint v0, CanvasPoint v1, CanvasPoint v2, Colour colour, DrawingWindow &window)
+{
+	float stepX1 = (v1.x - v0.x) / (v1.y - v0.y);
+	float stepX2 = (v2.x - v0.x) / (v2.y - v0.y);
 
+	for(float y = v0.y; y <= v1.y; ++y){
+		float x1 = v0.x + (y - v0.y) * stepX1;
+		float x2 = v0.x + (y - v0.y) * stepX2;
 
-	if (mid.y != top.y) {
-	top_mid_gap = float(y - top.y) / float(mid.y - top.y);
-	} else {
-
-		top_mid_gap = 0;  // No gap if the edge is horizontal
+		for (float x = std::min(x1, x2); x <= std::max(x1, x2); ++x) {
+			window.setPixelColour(x, y, (255 << 24) + (uint32_t(colour.red) << 16) + (uint32_t(colour.green) << 8) + uint32_t(colour.blue));
+		}
 	}
-
-	if(top.y != bot.y){
-	top_bot_gap = float(y - top.y) / float(bot.y - top.y);
-	} else{
-		top_bot_gap = 0;
-	}
-
-	// std::cout << "top_mid_gap: " << top_mid_gap << " curr y: " << y ;
-
-	lft_x = top.x + top_mid_gap * (mid.x - top.x);
-	rgt_x = top.x + top_bot_gap * (bot.x - top.x);
-	return std::make_pair(lft_x, rgt_x);
 }
 
 
-std::pair<int, int> fill_lower_triangle(int y, CanvasPoint top, CanvasPoint mid, CanvasPoint bot){
-	float fst_gap, scd_gap;
-	int lft, rgt;
+void fill_lower_triangle(CanvasPoint v0, CanvasPoint v1, CanvasPoint v2, Colour colour, DrawingWindow &window)
+{
+    float stepX1 = (v2.x - v0.x) / (v2.y - v0.y);
+    float stepX2 = (v2.x - v1.x) / (v2.y - v1.y);
 
-	fst_gap = (y - mid.y) / float(bot.y - mid.y);
-	scd_gap = (y - top.y) / float(bot.y - top.y);
-	lft = mid.x + fst_gap * (bot.x - mid.x);
-	rgt = top.x + scd_gap * (bot.x - top.x);
+    for(float y = v0.y; y <= v2.y; ++y){
+        float x1 = v0.x + (y - v0.y) * stepX1;
+        float x2 = v1.x + (y - v1.y) * stepX2;
 
-	return std::make_pair(lft, rgt);
+        for (float x = std::min(x1, x2); x <= std::max(x1, x2); ++x) {
+            window.setPixelColour(x, y, (255 << 24) + (uint32_t(colour.red) << 16) + (uint32_t(colour.green) << 8) + uint32_t(colour.blue));
+        }
+    }
 }
+
 
 
 void draw_filled_triangle(CanvasTriangle triangle, Colour colour, DrawingWindow &window){
-	triangle = reorderTriangle(triangle);
-	std::pair<int, int> coordinates;
+	CanvasTriangle sorted_triangle = reorderTriangle(triangle);
+	CanvasPoint v0 = sorted_triangle.v0();
+	CanvasPoint v1 = sorted_triangle.v1();
+	CanvasPoint v2 = sorted_triangle.v2();
 
-	for (int y = triangle[0].y; y <= triangle[2].y; ++y) {
-		if (y < triangle[1].y) {
-			coordinates = fill_top_triangle(y, triangle.v0(), triangle.v1(), triangle.v2());
-		} else {
-			coordinates = fill_lower_triangle(y, triangle.v0(), triangle.v1(), triangle.v2());
-		}
+	if(sorted_triangle.v1().y == sorted_triangle.v0().y){
+		fill_lower_triangle(v0, v1, v2, colour, window);
+	}
+	else if(sorted_triangle.v2().y == sorted_triangle.v1().y)
+	{
+		fill_top_triangle(v0, v1, v2, colour, window);
+	}
+	else {
+		float t = (v1.y - v0.y) / (v2.y - v0.y);
+		float v3_x = v0.x + t * (v2.x - v0.x);
+		CanvasPoint v3 = {v3_x, v1.y};
 
-		for (int x = std::min(coordinates.first,coordinates.second); x <= std::max(coordinates.first, coordinates.second); x++){
-			uint32_t fillcolour = (255 << 24) + (uint32_t(colour.red) << 16) + (uint32_t(colour.green) << 8) + uint32_t(colour.blue);
-			window.setPixelColour(x, y, fillcolour);
-		}
+		fill_top_triangle(v0, v1, v3, colour, window);
+		fill_lower_triangle(v1, v3, v2, colour, window);
 	}
 }
+
+
 
 
 void fill_texture_top(CanvasPoint bottom, CanvasPoint top, CanvasPoint middle, TextureMap &textureMap, DrawingWindow &window) {
@@ -385,6 +385,12 @@ CanvasPoint projectVertexOntoCanvasPoint(glm::vec3 cameraPosition, float focalLe
 	projected_position.x = window.width * 0.5 - projected_position.x;
 	projected_position.y += window.height * 0.5;
 
+	if(projected_position.y > 320)
+	{
+		std::cout<<"TOO LARGE Y VALUE:  " << projected_position.y << "\n";
+		std::errc;
+	}
+
 	return projected_position;
 }
 
@@ -418,31 +424,15 @@ std::vector<CanvasPoint> projectFileOntoCanvasPoint(std::vector<glm::vec3> verti
 void projectTriangleOntoCanvasPoint(std::vector<ModelTriangle>& triangles, glm::vec3 cameraPosition, float focalLength, DrawingWindow &window, float scalingFactor){
 	for(const auto& triangle : triangles)
 	{
-		// Project each vertex (v0, v1, v2) separately
 		CanvasPoint v0 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[0], window, scalingFactor);
 		CanvasPoint v1 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[1], window, scalingFactor);
 		CanvasPoint v2 = projectVertexOntoCanvasPoint(cameraPosition, focalLength, triangle.vertices[2], window, scalingFactor);
 
 		Colour colour = triangle.colour;
-
-
-		// drawLine(v0, v1, colour, window);
-		// drawLine(v1, v2, colour, window);
-		// drawLine(v2, v0, colour, window);
-
-
-		std::cout << "--------------------------------NEW DATA--------------------------------\n";
-		std::cout << "V0 x: " << triangle.vertices[0].x << " y: " << triangle.vertices[0].y << "\n";
-		std::cout << "V1 x: " << triangle.vertices[1].x << " y: " << triangle.vertices[1].y << "\n";
-		std::cout << "V2 x: " << triangle.vertices[2].x << " y: " << triangle.vertices[2].y << "\n";
-
 		CanvasTriangle new_triangle = CanvasTriangle(v0, v1, v2);
-		std::cout << "--------FRESHLY PROJECTED--------\n";
-		std::cout << "V0 x: " << new_triangle.vertices[0].x << " y: " << new_triangle.vertices[0].y << "\n";
-		std::cout << "V1 x: " << new_triangle.vertices[1].x << " y: " << new_triangle.vertices[1].y << "\n";
-		std::cout << "V2 x: " << new_triangle.vertices[2].x << " y: " << new_triangle.vertices[2].y << "\n";
 
 		draw_filled_triangle(new_triangle, colour, window);
+		// draw_stroked_triangle(new_triangle, colour, window);
 	}
 }
 
